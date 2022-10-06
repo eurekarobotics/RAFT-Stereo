@@ -56,7 +56,8 @@ class CorrBlockFast1D:
         _, _, _, W2 = fmap2.shape
         fmap1 = fmap1.view(B, D, H, W1)
         fmap2 = fmap2.view(B, D, H, W2)
-        corr = torch.einsum('aijk,aijh->ajkh', fmap1, fmap2)
+        # corr = torch.einsum('aijk,aijh->ajkh', fmap1, fmap2)
+        corr = torch.matmul(fmap1[:, :, :, :, None], fmap2[:, :, :, None, :]).sum(1)
         corr = corr.reshape(B, H, W1, 1, W2).contiguous()
         return corr / torch.sqrt(torch.tensor(D).float())
 
@@ -151,7 +152,8 @@ class CorrBlock1D:
         _, _, _, W2 = fmap2.shape
         fmap1 = fmap1.view(B, D, H, W1)
         fmap2 = fmap2.view(B, D, H, W2)
-        corr = torch.einsum('aijk,aijh->ajkh', fmap1, fmap2)
+        # corr = torch.einsum('aijk,aijh->ajkh', fmap1, fmap2)
+        corr = torch.matmul(fmap1[:, :, :, :, None], fmap2[:, :, :, None, :]).sum(1)
         corr = corr.reshape(B, H, W1, 1, W2).contiguous()
         return corr / torch.sqrt(torch.tensor(D).float())
 
