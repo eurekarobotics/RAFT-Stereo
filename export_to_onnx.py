@@ -50,9 +50,9 @@ def export_to_onnx(args):
         input_names=["left", "right"],  # the model's input names
         output_names=["output"],
     )
-
-    test_img_left = "./datasets/Middlebury/MiddEval3/testF/Australia/im0.png"
-    test_img_right = "./datasets/Middlebury/MiddEval3/testF/Australia/im1.png"
+    # sample images from Middlebury dataset (MiddEval3/testF/Australia)
+    test_img_left = "./images/im0.png"
+    test_img_right = "./images/im1.png"
 
     image_left = load_image(test_img_left, (in_w, in_h))
     image_right = load_image(test_img_right, (in_w, in_h))
@@ -87,18 +87,6 @@ def export_to_onnx(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--restore_ckpt", help="restore checkpoint", required=True)
-    parser.add_argument(
-        "-l",
-        "--left_imgs",
-        help="path to all first (left) frames",
-        default="datasets/Middlebury/MiddEval3/testH/*/im0.png",
-    )
-    parser.add_argument(
-        "-r",
-        "--right_imgs",
-        help="path to all second (right) frames",
-        default="datasets/Middlebury/MiddEval3/testH/*/im1.png",
-    )
     parser.add_argument(
         "--mixed_precision", action="store_true", help="use mixed precision"
     )
