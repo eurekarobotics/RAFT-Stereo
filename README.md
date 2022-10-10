@@ -15,8 +15,12 @@ Lahav Lipson, Zachary Teed and Jia Deng<br/>
 ```
 ## Convert to Onnx
 ```Shell
-!python export_to_onnx.py --restore_ckpt models/raftstereo-middlebury.pth --mixed_precision --corr_implementation reg
+python export_to_onnx.py --restore_ckpt models/raftstereo-middlebury.pth --mixed_precision --corr_implementation reg
 ```
+
+## Sample code to run onnx model  
+`run_onnx_demo.py` 
+
 ## (Optional) Faster Implementation
 
 We provide a faster CUDA implementation of the correlation sampler which works with mixed precision feature maps.
