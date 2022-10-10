@@ -37,6 +37,7 @@ class RAFTStereo(nn.Module):
                 nn.Conv2d(128, 256, 3, padding=1))
         else:
             self.fnet = BasicEncoder(output_dim=256, norm_fn='instance', downsample=args.n_downsample)
+        self.iters = args.valid_iters
 
     def freeze_bn(self):
         for m in self.modules():
@@ -67,7 +68,7 @@ class RAFTStereo(nn.Module):
         return up_flow.reshape(N, D, factor*H, factor*W)
 
 
-    def forward(self, image1, image2, iters=12, flow_init=None, test_mode=False):
+    def forward(self, image1, image2):
         """ Estimate optical flow between pair of frames """
 
         image1 = (2 * (image1 / 255.0) - 1.0).contiguous()
@@ -101,11 +102,11 @@ class RAFTStereo(nn.Module):
 
         coords0, coords1 = self.initialize_flow(net_list[0])
 
-        if flow_init is not None:
-            coords1 = coords1 + flow_init
+        # if flow_init is not None:
+        #     coords1 = coords1 + flow_init
 
-        flow_predictions = []
-        for itr in range(iters):
+        # flow_predictions = []
+        for itr in range(self.iters):
             coords1 = coords1.detach()
             corr = corr_fn(coords1) # index correlation volume
             flow = coords1 - coords0
@@ -123,7 +124,7 @@ class RAFTStereo(nn.Module):
             coords1 = coords1 + delta_flow
 
             # We do not need to upsample or output intermediate results in test_mode
-            if test_mode and itr < iters-1:
+            if itr < self.iters-1:
                 continue
 
             # upsample predictions
@@ -133,9 +134,9 @@ class RAFTStereo(nn.Module):
                 flow_up = self.upsample_flow(coords1 - coords0, up_mask)
             flow_up = flow_up[:,:1]
 
-            flow_predictions.append(flow_up)
+            # flow_predictions.append(flow_up)
+        return flow_up
+        # if test_mode:
+        #     return coords1 - coords0, flow_up
 
-        if test_mode:
-            return coords1 - coords0, flow_up
-
-        return flow_predictions
+        # return flow_predictions
