@@ -97,6 +97,10 @@ If the camera intrinsics and camera baseline are known, disparity predictions ca
 
 Note that the units of the focal length are _pixels_ not millimeters. (cx1-cx0) is the x-difference of principal points.
 
+## Convert to Onnx
+!python export_to_onnx.py --restore_ckpt models/raftstereo-middlebury.pth --mixed_precision --corr_implementation reg
+
+
 ## Evaluation
 
 To evaluate a trained model on a validation set (e.g. Middlebury), run
