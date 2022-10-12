@@ -40,16 +40,17 @@ def export_to_onnx(args):
     onnx_file = f"raftstereo_{in_w}x{in_h}.onnx"
 
     # Export the model
-    torch.onnx.export(
-        model,
-        (tensor_1, tensor_2),
-        onnx_file,  # where to save the model (can be a file or file-like object)
-        export_params=True,  # store the trained parameter weights inside the model file
-        opset_version=16,  # the ONNX version to export the model to
-        do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=["left", "right"],  # the model's input names
-        output_names=["output"],
-    )
+    with torch.no_grad():
+      torch.onnx.export(
+          model,
+          (tensor_1, tensor_2),
+          onnx_file,  # where to save the model (can be a file or file-like object)
+          export_params=True,  # store the trained parameter weights inside the model file
+          opset_version=16,  # the ONNX version to export the model to
+          do_constant_folding=True,  # whether to execute constant folding for optimization
+          input_names=["left", "right"],  # the model's input names
+          output_names=["output"],
+      )
     # sample images from Middlebury dataset (MiddEval3/testF/Australia)
     test_img_left = "./images/im0.png"
     test_img_right = "./images/im1.png"
