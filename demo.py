@@ -43,7 +43,7 @@ def demo(args):
             padder = InputPadder(image1.shape, divis_by=32)
             image1, image2 = padder.pad(image1, image2)
 
-            _, flow_up = model(image1, image2, iters=args.valid_iters, test_mode=True)
+            flow_up = model(image1, image2)
             file_stem = imfile1.split('/')[-2]
             if args.save_numpy:
                 np.save(output_directory / f"{file_stem}.npy", flow_up.cpu().numpy().squeeze())
