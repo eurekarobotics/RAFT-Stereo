@@ -75,8 +75,8 @@ def bilinear_sampler(img, coords):
         ygrid = 2 * ygrid / (H - 1) - 1
 
     grid = torch.cat([xgrid, ygrid], dim=-1)
-    img = F.grid_sample(img, grid, align_corners=True)
-    # img = bilinear_grid_sample(img, grid)
+    #img = F.grid_sample(img, grid, align_corners=True)
+    img = bilinear_grid_sample(img, grid)
 
     return img
 

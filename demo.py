@@ -39,15 +39,18 @@ def demo(args):
         for (imfile1, imfile2) in tqdm(list(zip(left_images, right_images))):
             image1 = load_image(imfile1)
             image2 = load_image(imfile2)
-
-            padder = InputPadder(image1.shape, divis_by=32)
+            # change to divis by 8 temporarily (ori = 32)
+            padder = InputPadder(image1.shape, divis_by=8)
             image1, image2 = padder.pad(image1, image2)
 
-            flow_up = model(image1, image2)
-            file_stem = imfile1.split('/')[-2]
-            if args.save_numpy:
-                np.save(output_directory / f"{file_stem}.npy", flow_up.cpu().numpy().squeeze())
-            plt.imsave(output_directory / f"{file_stem}.png", -flow_up.cpu().numpy().squeeze(), cmap='jet')
+            disparity = model(image1, image2)
+            file_stem = imfile1.split('/')[-1]
+            disparity = -disparity.cpu().numpy().squeeze()
+            disparity_display = (disparity - disparity.min())/(disparity.max()-disparity.min())*255
+            disparity_display = disparity_display.astype("uint8")
+            #if args.save_numpy:
+            np.save(output_directory / f"{file_stem}.npy",-disparity)
+            plt.imsave(output_directory / f"{file_stem}", disparity_display, cmap='jet')
 
 
 if __name__ == '__main__':
