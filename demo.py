@@ -44,14 +44,13 @@ def demo(args):
             image1, image2 = padder.pad(image1, image2)
 
             disparity = model(image1, image2)
-            file_stem = imfile1.split('/')[-1]
+            file_stem = imfile1.split('/')[-1].split('.')[0]
             disparity = -disparity.cpu().numpy().squeeze()
             disparity_display = (disparity - disparity.min())/(disparity.max()-disparity.min())*255
             disparity_display = disparity_display.astype("uint8")
             #if args.save_numpy:
-            np.save(output_directory / f"{file_stem}.npy",-disparity)
-            plt.imsave(output_directory / f"{file_stem}", disparity_display, cmap='jet')
-
+            np.save(output_directory / f"{file_stem}.npy", disparity)
+            plt.imsave(output_directory / f"{file_stem}.png", disparity_display, cmap='jet')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
