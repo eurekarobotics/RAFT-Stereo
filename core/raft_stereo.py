@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from core.update import BasicMultiUpdateBlock
 from core.extractor import BasicEncoder, MultiBasicEncoder, ResidualBlock
 from core.corr import CorrBlock1D, PytorchAlternateCorrBlock1D, CorrBlockFast1D, AlternateCorrBlock
-from core.utils.utils import coords_grid, upflow8
+from core.utils.utils import coords_grid, upflow8, load_image, InputPadder
 
 
 try:
@@ -67,6 +67,121 @@ class RAFTStereo(nn.Module):
         up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
         return up_flow.reshape(N, D, factor*H, factor*W)
 
+    def get_average_corr_fn(self, image_list_1, image_list_2):
+        """ Compute average correlation function
+        ->Memory efficient implementation(load images one by one)
+        Args:
+            image_list_1: list of left images
+            image_list_2: list of right images
+        Returns:
+            corr_fn: average correlation function
+        """
+        corr_pyramid = []
+        count = len(image_list_1)
+        for imfile1,imfile2 in zip(image_list_1, image_list_2):
+            image1 = load_image(imfile1)
+            image2 = load_image(imfile2)
+            # change to divis by 8 temporarily (ori = 32)
+            padder = InputPadder(image1.shape, divis_by=8)
+            image1, image2 = padder.pad(image1, image2)
+            image1 = (2 * (image1 / 255.0) - 1.0).contiguous()
+            image2 = (2 * (image2 / 255.0) - 1.0).contiguous()
+
+            # run the context network
+            with autocast(enabled=self.args.mixed_precision):
+                if self.args.shared_backbone:
+                    *cnet_list, x = self.cnet(torch.cat((image1, image2), dim=0), dual_inp=True, num_layers=self.args.n_gru_layers)
+                    fmap1, fmap2 = self.conv2(x).split(dim=0, split_size=x.shape[0]//2)
+                else:
+                    fmap1, fmap2 = self.fnet([image1, image2])
+            if self.args.corr_implementation == "reg": # Default
+                corr_block = CorrBlock1D
+                fmap1, fmap2 = fmap1.float(), fmap2.float()
+            elif self.args.corr_implementation == "alt": # More memory efficient than reg
+                corr_block = PytorchAlternateCorrBlock1D
+                fmap1, fmap2 = fmap1.float(), fmap2.float()
+            elif self.args.corr_implementation == "reg_cuda": # Faster version of reg
+                corr_block = CorrBlockFast1D
+            elif self.args.corr_implementation == "alt_cuda": # Faster version of alt
+                corr_block = AlternateCorrBlock
+            corr_fn = corr_block(fmap1, fmap2, radius=self.args.corr_radius, num_levels=self.args.corr_levels)
+
+            # first time
+            if len(corr_pyramid) == 0:
+                corr_pyramid = corr_fn.corr_pyramid
+            else:
+                for ind,value  in enumerate(corr_fn.corr_pyramid):
+                    corr_pyramid[ind] += value
+        corr_fn.corr_pyramid = [corr/count for corr in corr_pyramid]
+        return corr_fn
+
+    def space_time_stereo(self, image_list_1, image_list_2, corr_fn):
+        """ Estimate disparity from correlation pyramid """
+        # image
+        disp_output = None
+        count = len(image_list_1)
+
+        for imfile1,imfile2 in zip(image_list_1, image_list_2):
+            image1 = load_image(imfile1)
+            image2 = load_image(imfile2)
+            # change to divis by 8 temporarily (ori = 32)
+            padder = InputPadder(image1.shape, divis_by=8)
+            image1, image2 = padder.pad(image1, image2)
+            image1 = (2 * (image1 / 255.0) - 1.0).contiguous()
+            image2 = (2 * (image2 / 255.0) - 1.0).contiguous()
+
+            # run the context network
+            with autocast(enabled=self.args.mixed_precision):
+                if self.args.shared_backbone:
+                    *cnet_list, x = self.cnet(torch.cat((image1, image2), dim=0), dual_inp=True, num_layers=self.args.n_gru_layers)
+                else:
+                    cnet_list = self.cnet(image1, num_layers=self.args.n_gru_layers)
+                net_list = [torch.tanh(x[0]) for x in cnet_list]
+                inp_list = [torch.relu(x[1]) for x in cnet_list]
+
+                # Rather than running the GRU's conv layers on the context features multiple times, we do it once at the beginning
+                inp_list = [list(conv(i).split(split_size=conv.out_channels//3, dim=1)) for i,conv in zip(inp_list, self.context_zqr_convs)]
+                
+            disp = self.estimate_disparity(corr_fn, net_list, inp_list)
+            if disp_output is None:
+                disp_output = disp
+            else:
+                disp_output += disp
+        return disp_output/count
+        
+    def estimate_disparity(self,corr_fn, net_list, inp_list):
+        
+        coords0, coords1 = self.initialize_flow(net_list[0])
+
+        for itr in range(self.iters):
+            coords1 = coords1.detach()
+            corr = corr_fn(coords1) # index correlation volume
+            flow = coords1 - coords0
+            with autocast(enabled=self.args.mixed_precision):
+                if self.args.n_gru_layers == 3 and self.args.slow_fast_gru: # Update low-res GRU
+                    net_list = self.update_block(net_list, inp_list, iter32=True, iter16=False, iter08=False, update=False)
+                if self.args.n_gru_layers >= 2 and self.args.slow_fast_gru:# Update low-res GRU and mid-res GRU
+                    net_list = self.update_block(net_list, inp_list, iter32=self.args.n_gru_layers==3, iter16=True, iter08=False, update=False)
+                net_list, up_mask, delta_flow = self.update_block(net_list, inp_list, corr, flow, iter32=self.args.n_gru_layers==3, iter16=self.args.n_gru_layers>=2)
+
+            # in stereo mode, project flow onto epipolar
+            delta_flow[:,1] = 0.0
+
+            # F(t+1) = F(t) + \Delta(t)
+            coords1 = coords1 + delta_flow
+
+            # We do not need to upsample or output intermediate results in test_mode
+            if itr < self.iters-1:
+                continue
+
+            # upsample predictions
+            if up_mask is None:
+                flow_up = upflow8(coords1 - coords0)
+            else:
+                flow_up = self.upsample_flow(coords1 - coords0, up_mask)
+            flow_up = flow_up[:,:1]
+
+        return flow_up
 
     def forward(self, image1, image2):
         """ Estimate optical flow between pair of frames """

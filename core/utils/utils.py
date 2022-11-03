@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from scipy import interpolate
-
+from PIL import Image
 
 class InputPadder:
     """Pads images such that dimensions are divisible by 8"""
@@ -31,6 +31,10 @@ class InputPadder:
         c = [self._pad[2], ht - self._pad[3], self._pad[0], wd - self._pad[1]]
         return x[..., c[0] : c[1], c[2] : c[3]]
 
+def load_image(imfile, device="cuda"):
+    img = np.array(Image.open(imfile)).astype(np.uint8)
+    img = torch.from_numpy(img).permute(2, 0, 1).float()
+    return img[None].to(device)
 
 def forward_interpolate(flow):
     flow = flow.detach().cpu().numpy()
