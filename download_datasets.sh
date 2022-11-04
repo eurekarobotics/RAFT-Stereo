@@ -13,6 +13,8 @@ wget https://vision.middlebury.edu/stereo/submit3/zip/MiddEval3-data-F.zip
 unzip MiddEval3-data-F.zip
 wget https://vision.middlebury.edu/stereo/submit3/zip/MiddEval3-GT0-F.zip
 unzip MiddEval3-GT0-F.zip
+wget http://amsacta.unibo.it/6876/1/booster_gt.zip
+unzip booster_gt.zip
 rm *.zip
 cd ../..
 

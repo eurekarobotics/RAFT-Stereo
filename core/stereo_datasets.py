@@ -257,6 +257,20 @@ class KITTI(StereoDataset):
             self.disparity_list += [ disp ]
 
 
+class Booster(StereoDataset):
+    def __init__(self, aug_params=None, root='datasets/booster_gt', image_set='train'):
+        """Only support balanced dataset
+        """
+        super(Booster, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispBooster)
+
+        image1_list = sorted( glob(osp.join(root, f'{image_set}/balanced/*/im0.png')) )
+        image2_list = sorted( glob(osp.join(root, f'{image_set}/balanced/*/im1.png')) )
+        disp_list = sorted( glob(osp.join(root, '{image_set}/balanced/*/disp_00.npy')) ) if image_set == 'train' else [osp.join(root, 'train/balanced/Door/disp_00.npy')]*len(image1_list)
+
+        for img1, img2, disp in zip(image1_list, image2_list, disp_list):
+            self.image_list += [ [img1, img2] ]
+            self.disparity_list += [ disp ]
+
 class Middlebury(StereoDataset):
     def __init__(self, aug_params=None, root='datasets/Middlebury', split='F'):
         super(Middlebury, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispMiddlebury)
@@ -312,6 +326,9 @@ def fetch_dataloader(args):
         elif dataset_name.startswith('tartan_air'):
             new_dataset = TartanAir(aug_params, keywords=dataset_name.split('_')[2:])
             logging.info(f"Adding {len(new_dataset)} samples from Tartain Air")
+        elif dataset_name == 'booster':
+            new_dataset = Booster(aug_params)
+            logging.info(f"Adding {len(new_dataset)} samples from Booster")
         train_dataset = new_dataset if train_dataset is None else train_dataset + new_dataset
 
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, 

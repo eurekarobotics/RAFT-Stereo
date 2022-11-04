@@ -152,6 +152,11 @@ def readDispTartanAir(file_name):
     valid = disp > 0
     return disp, valid
 
+def readDispBooster(file_name):
+    disp = np.load(file_name)
+    valid = disp > 0
+    return disp, valid
+
 
 def readDispMiddlebury(file_name):
     if basename(file_name) == 'disp0GT.pfm':
