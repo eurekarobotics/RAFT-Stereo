@@ -43,12 +43,12 @@ def export_to_onnx(args):
     with torch.no_grad():
       torch.onnx.export(
           model,
-          (tensor_1, tensor_2),
+          torch.cat((tensor_1, tensor_2), dim=1),
           onnx_file,  # where to save the model (can be a file or file-like object)
           export_params=True,  # store the trained parameter weights inside the model file
           opset_version=16,  # the ONNX version to export the model to
           do_constant_folding=True,  # whether to execute constant folding for optimization
-          input_names=["left", "right"],  # the model's input names
+          input_names=["input_data"],  # the model's input names
           output_names=["output"],
       )
     # sample images from Middlebury dataset (MiddEval3/testF/Australia)
@@ -60,14 +60,15 @@ def export_to_onnx(args):
     # run inference on onnx model
     sess = ort.InferenceSession(onnx_file, providers=["CUDAExecutionProvider"])
     onnx_output = sess.run(
-        None, {"left": image_left.cpu().numpy(), "right": image_right.cpu().numpy()}
+        None, {"input_data": torch.cat((image_left.cpu(), image_right.cpu()), dim=1).numpy()}
     )[0].squeeze()
 
     # run inference with pytorch
     with torch.no_grad():
         padder = InputPadder(image_left.shape, divis_by=32)
         image1, image2 = padder.pad(image_left, image_right)
-        ori_output = model(image1, image2).cpu().numpy().squeeze()
+        input_data = torch.cat((image_left, image_right), dim=1)
+        ori_output = model(input_data).cpu().numpy().squeeze()
 
     output_images = np.concatenate((-ori_output, -onnx_output), axis=1)
     plt.imsave(f"{onnx_file.split()[0]}_comparison.png", output_images, cmap="jet")
